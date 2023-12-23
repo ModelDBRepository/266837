@@ -1,0 +1,201 @@
+# Neuroprotective role of gap junctions in a neuron astrocyte network model
+# G. Huguet, A. Joglekar, L. Matamba Messi, R. Buckalew, S. Wong, D. Terman
+# Biophysical Journal, 111, 452-462, July 26, 2016
+
+
+p R=8310
+p Temp=310.0
+p F=96485
+frt=R*Temp/F
+
+# Volumes(um^3) and Area (um^2) of neuron units 
+p S=922
+p voln=2160
+p delta=.1
+vole=delta*voln
+
+#astrocyte surface
+p Sas=1600
+#astrocyte volume
+p vola=2000
+
+# Conversion factors from uA/cm^2 to mM/ms
+c1=10.0*s/(F*voln)
+c2=10.0*s/(F*vole)
+c3a=10*sas/(F*vola)
+c3e=10*sas/(F*vole)
+
+# All currents density have the unit uA/cm^2 as a consequence
+# since the voltage is in mV, all the conductances density have the unit mS/cm^2
+# Fast sodium
+p gna=3
+p thm=-34.,sigm=5.
+p phih=.05
+minf(v)=1./(1.+exp(-(v-thm)/sigm))
+ina(v,n,vna)=gna*minf(v)^3*(1-n)*(v-vna)
+
+# NaP
+p gnap=.4
+p taubar=10000
+p thmp=-40,sigmp=6
+p thhp=-48,sighp=-6
+p vt=-49,sig=6
+minfp(v)=1./(1.+exp(-(v-thmp)/sigmp))
+hinfp(v)=1./(1.+exp(-(v-thhp)/sighp))
+tauhp(v)=taubar/cosh((v-vt)/(2*sig))
+inap(v,hp,vna)=gnap*minfp(v)*hp*(v-vna)
+
+# IK
+p gk=5.
+p thn=-55.,sgn=14.
+p taun0=.05,taun1=.27,thnt=-40,sn=-12
+p phin=.8
+ninf(v)=1./(1.+exp(-(v-thn)/sgn))
+taun(v)=taun0+taun1/(1+exp(-(v-thnt)/sn))
+ik(v,n,vk)=gk*(n^4)*(v-vk)
+
+# Ileak
+p gl=.3
+p vl=-70
+il(v)=gl*(v-vl)
+
+p iapp=0
+
+# We measure the flux of ions due to Na,K-ATPase as currents in the unit uA/cm^2
+p rhon=10
+ipump[1..30]=rhon/(((1+2/ke[j])^2)*(1+7.7/nai[j])^3)
+inapump[1..30]=3*ipump[j]
+ikpump[1..30]=-2*ipump[j]
+
+# Neurons Na and K Nernstian reversal potentials in mV
+vk[1..30]=frt*ln(ke[j]/ki[j])
+vna[1..30]=frt*ln(nae[j]/nai[j])
+
+# Ionic diffusion in mM/ms with diffusion factors in /ms
+
+kdiff[1..1]=d5*2*(ke[j+1]-ke[j])
+kdiff[2..29]=d5*(ke[j+1]+ke[j-1]-2*ke[j])
+kdiff[30..30]=d5*2*(ke[j-1]-ke[j])
+
+nadiff[1..1]=d8*2*(nae[j+1]-nae[j])
+nadiff[2..29]=d8*(nae[j+1]+nae[j-1]-2*nae[j])
+nadiff[30..30]=d8*2*(nae[j-1]-nae[j])
+
+# We have used a membrane capacitance density of 1 uF/cm^2. The unit of the capacitance is chosen
+# so that current densities are measured in uA/cm^2
+v[1..30]'= (-(ina(v[j],n[j],vna[j])+inap(v[j],hp[j],vna[j])+ik(v[j],n[j],vk[j])+il(v[j])+ipump[j])+iapp)
+n[1..30]'= phin*(ninf(v[j])-n[j])/taun(v[j])
+hp[1..30]'=phih*(hinfp(v[j])-hp[j])/tauhp(v[j])
+
+# These ions are measured in mM
+#ke[1..5]'=eps*heav(-40-v[j])+c2*(ik(v[j],n[j],vk[j])+ikpump[j])+kdiff[j]+c3e*(ika(va[j],ke[j],kia[j])-2*ipumpa(ke[j],naia[j]))
+ke[1..5]'=eps+c2*(ik(v[j],n[j],vk[j])+ikpump[j])+kdiff[j]+c3e*(ika(va[j],ke[j],kia[j])-2*ipumpa(ke[j],naia[j]))
+ke[6..30]'=c2*(ik(v[j],n[j],vk[j])+ikpump[j])+kdiff[j]+c3e*(ika(va[j],ke[j],kia[j])-2*ipumpa(ke[j],naia[j]))
+nai[1..30]'=-c1*(ina(v[j],n[j],vna[j])+inap(v[j],hp[j],vna[j])+inapump[j])
+nae[1..30]'=c2*(ina(v[j],n[j],vna[j])+inap(v[j],hp[j],vna[j])+inapump[j])+nadiff[j]+c3e*(inaa(va[j],nae[j],naia[j])+3*ipumpa(ke[j],naia[j]))
+ki[1..30]'=-c1*(ik(v[j],n[j],vk[j])+ikpump[j])
+
+# K+ is injected into neurons 1-6 at rate eps. This turns off once v1 > -30.
+
+eps'=0
+i eps=.005
+
+global 1 {v1+30} {eps=0}
+
+#values used in the submitted version of the paper
+p d5=0.02
+p d8=0.013
+
+i v[1..30]=-70.53
+i n[1..30]=0.25
+i hp[1..30]=0.976
+i ke[1..30]=5.8
+i nai[1..30]=3.7
+i nae[1..30]=145
+i ki[1..30]=137
+
+aux ipump[1..30]=ipump[j]
+
+##### Astrocyte
+
+p pka=4.8e-06
+P pnaa=.015e-06
+p sigmagap=0.
+pkgap=sigmagap*pka
+pnagap=.8*pkgap
+
+p gkir=50
+p gamma=.2
+p rhoa=10
+p cma=1
+p iappa=0
+p ncell=1
+
+phia(v)=v/frt
+phigap(v1,v2)=(v1-v2)/frt
+
+ek(ke,ki)=frt*log(ke/ki)
+
+aux ek[1..30]=ek(ke[j],kia[j])
+
+ika(v,ke,ki)=(1-gamma)*PKa*F*phia(v)*(ke*exp(-phia(v))-ki)/(exp(-phia(v))-1)
+inaa(v,nae,nai)=PNaa*F*phia(v)*(Nae*exp(-phia(v))-Nai)/(exp(-phia(v))-1)
+ipumpa(ke,nai)=rhoa/(((1+2/ke)^2)*(1+10/nai)^3)
+
+gap(x,y,a,b)=F*phigap(x,y)*((b*exp(-phigap(x,y))-a)/(exp(-phigap(x,y))-1))
+kg(v1,v2,ki1,ki2)=pkgap*gap(v1,v2,ki1,ki2)
+nag(v1,v2,nai1,nai2)=pnagap*gap(v1,v2,nai1,nai2)
+
+ikga[1..25]=kg(va[j],va[j+1],kia[j],kia[j+1])+kg(va[j],va[j+2],kia[j],kia[j+2])+kg(va[j],va[j+3],kia[j],kia[j+3])+kg(va[j],va[j+4],kia[j],kia[j+4])+kg(va[j],va[j+5],kia[j],kia[j+5])
+ikga[26..26]=kg(va[j],va[j+1],kia[j],kia[j+1])+kg(va[j],va[j+2],kia[j],kia[j+2])+kg(va[j],va[j+3],kia[j],kia[j+3])+kg(va[j],va[j+4],kia[j],kia[j+4])
+ikga[27..27]=kg(va[j],va[j+1],kia[j],kia[j+1])+kg(va[j],va[j+2],kia[j],kia[j+2])+kg(va[j],va[j+3],kia[j],kia[j+3])
+ikga[28..28]=kg(va[j],va[j+1],kia[j],kia[j+1])+kg(va[j],va[j+2],kia[j],kia[j+2])
+ikga[29..29]=kg(va[j],va[j+1],kia[j],kia[j+1])
+ikga[30..30]=0
+
+
+ikgb[6..30]=kg(va[j],va[j-1],kia[j],kia[j-1])+kg(va[j],va[j-2],kia[j],kia[j-2])+kg(va[j],va[j-3],kia[j],kia[j-3])+kg(va[j],va[j-4],kia[j],kia[j-4])+kg(va[j],va[j-5],kia[j],kia[j-5])
+ikgb[5..5]=kg(va[j],va[j-1],kia[j],kia[j-1])+kg(va[j],va[j-2],kia[j],kia[j-2])+kg(va[j],va[j-3],kia[j],kia[j-3])+kg(va[j],va[j-4],kia[j],kia[j-4])
+ikgb[4..4]=kg(va[j],va[j-1],kia[j],kia[j-1])+kg(va[j],va[j-2],kia[j],kia[j-2])+kg(va[j],va[j-3],kia[j],kia[j-3])
+ikgb[3..3]=kg(va[j],va[j-1],kia[j],kia[j-1])+kg(va[j],va[j-2],kia[j],kia[j-2])
+ikgb[2..2]=kg(va[j],va[j-1],kia[j],kia[j-1])
+ikgb[1..1]=0
+
+ikgap[1..30]=ikga[j]+ikgb[j]
+
+inaga[1..25]=nag(va[j],va[j+1],naia[j],naia[j+1])+nag(va[j],va[j+2],naia[j],naia[j+2])+nag(va[j],va[j+3],naia[j],naia[j+3])+nag(va[j],va[j+4],naia[j],naia[j+4])+nag(va[j],va[j+5],naia[j],naia[j+5])
+inaga[26..26]=nag(va[j],va[j+1],naia[j],naia[j+1])+nag(va[j],va[j+2],naia[j],naia[j+2])+nag(va[j],va[j+3],naia[j],naia[j+3])+nag(va[j],va[j+4],naia[j],naia[j+4])
+inaga[27..27]=nag(va[j],va[j+1],naia[j],naia[j+1])+nag(va[j],va[j+2],naia[j],naia[j+2])+nag(va[j],va[j+3],naia[j],naia[j+3])
+inaga[28..28]=nag(va[j],va[j+1],naia[j],naia[j+1])+nag(va[j],va[j+2],naia[j],naia[j+2])
+inaga[29..29]=nag(va[j],va[j+1],naia[j],naia[j+1])
+inaga[30..30]=0
+
+
+inagb[6..30]=nag(va[j],va[j-1],naia[j],naia[j-1])+nag(va[j],va[j-2],naia[j],naia[j-2])+nag(va[j],va[j-3],naia[j],naia[j-3])+nag(va[j],va[j-4],naia[j],naia[j-4])+nag(va[j],va[j-5],naia[j],naia[j-5])
+inagb[5..5]=nag(va[j],va[j-1],naia[j],naia[j-1])+nag(va[j],va[j-2],naia[j],naia[j-2])+nag(va[j],va[j-3],naia[j],naia[j-3])+nag(va[j],va[j-4],naia[j],naia[j-4])
+inagb[4..4]=nag(va[j],va[j-1],naia[j],naia[j-1])+nag(va[j],va[j-2],naia[j],naia[j-2])+nag(va[j],va[j-3],naia[j],naia[j-3])
+inagb[3..3]=nag(va[j],va[j-1],naia[j],naia[j-1])+nag(va[j],va[j-2],naia[j],naia[j-2])
+inagb[2..2]=nag(va[j],va[j-1],naia[j],naia[j-1])
+inagb[1..1]=0
+
+inagap[1..30]=inaga[j]+inagb[j]
+
+igap[1..30]=ikgap[j]+inagap[j]
+
+aux ika[1..30]=ika(va[j],ke[j],kia[j])
+
+va[1..30]'=-(ika(va[j],ke[j],kia[j])+inaa(va[j],nae[j],naia[j])+ipumpa(ke[j],naia[j])+igap[j]-iappa)/cma
+kia[1..30]'=-c3a*(ika(va[j],ke[j],kia[j])-2*ipumpa(ke[j],naia[j])+ikgap[j])
+naia[1..30]'=-c3a*(inaa(va[j],nae[j],naia[j])+3*ipumpa(ke[j],naia[j])+inagap[j])
+
+i va[1..30]=-81
+i kia[1..30]=125
+i naia[1..30]=5.6
+
+
+### XPP settings
+
+@ dt=.5,total=50000,meth=qualrk,tolerance=.0000001
+@ xp=t,yp=v1,xlo=0,xhi=50000,ylo=-90,yhi=0.,bound=700000,maxstor=1000000
+
+done
